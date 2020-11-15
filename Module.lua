@@ -283,6 +283,18 @@ local Properties = {
 	}
 }
 
+local config = {}
+local nameID = getgenv().GuiName
+local httpService = game:GetService("HttpService")
+
+pcall(function()
+    config = httpService:JSONDecode(readfile(nameID .. ".lua"))
+end)
+
+local function saveConfig()
+    writefile(nameID .. ".lua", httpService:JSONEncode(config))
+end;
+
 function FindType(String)
 	for _, Type in next, Types do
 		if Type:sub(1, #String):lower() == String:lower() then
@@ -585,7 +597,7 @@ function TryAddMenu(Object, Menu, ReturnTable)
 		MenuBuild.Position = UDim2.fromOffset(MenuButton.AbsolutePosition.X,MenuButton.AbsolutePosition.Y) - UDim2.fromOffset(125,5)
 		MenuBuild.ZIndex = 100
 		MenuBuild.ClipsDescendants = true
-		MenuBuild.Parent = MainGUI
+        MenuBuild.Parent = MainGUI
 
 		MenuButton:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
 			MenuBuild.Position = UDim2.fromOffset(MenuButton.AbsolutePosition.X,MenuButton.AbsolutePosition.Y) - UDim2.fromOffset(125,5)
@@ -707,7 +719,7 @@ function Material.Load(Config)
 	local Title = Config.Title or "MaterialLua"
 	local SizeX = Config.SizeX or 300
 	local SizeY = Config.SizeY or 500
-	local Theme = Config.Theme or "Light"
+	local Theme = Config.Theme or "Dark"
 	local Overrides = Config.ColorOverrides or {}
 	local Open = true
 
@@ -738,13 +750,23 @@ function Material.Load(Config)
 	MainFrame.ImageColor3 = Theme.MainFrame
 	MainFrame.Parent = NewInstance
 
+	pcall(function()
+		InputService.InputBegan:Connect(function(input, onGui)
+			pcall(function()
+				if not onGui and (input.KeyCode == Enum.KeyCode[getgenv().togglekey]) then
+					MainFrame.Visible = not MainFrame.Visible
+				end
+		    end)
+		end)
+	end)
+
 	TweenService:Create(MainFrame, TweenInfo.new(1), {Size = UDim2.fromOffset(SizeX,SizeY)}):Play()
 
 	wait(1)
 
 	local MainShadow = Objects.new("Shadow")
 	MainShadow.ImageColor3 = Theme.MainFrame
-	MainShadow.Parent = MainFrame
+    MainShadow.Parent = MainFrame
 
 	local TitleBar = Objects.new("SmoothButton")
 	TitleBar.Name = "TitleBar"
@@ -1120,6 +1142,274 @@ function Material.Load(Config)
 			return ButtonLibrary
 		end
 
+		function CreateNewKeybind(ButtonConfig, Parent)
+			local ButtonText = ButtonConfig.Text or "nil button"
+			local ButtonCallback = ButtonConfig.Callback or function() print("nil button") end
+			local Menu = ButtonConfig.Menu or {}
+			local Key = config[ButtonText] or ButtonConfig.Key 
+			local Button = Objects.new("SmoothButton")
+			Button.Name = "Button"
+			Button.Size = UDim2.fromScale(1,0) + UDim2.fromOffset(0,30)
+			Button.ImageColor3 = ThisTheme.Button
+			Button.ImageTransparency = 1
+			Button.Parent = Parent
+		
+			local ButtonShadow = Objects.new("Shadow")
+			ButtonShadow.ImageColor3 = ThisTheme.Button
+			ButtonShadow.ImageTransparency = 1
+			ButtonShadow.Parent = Button
+
+			if config[ButtonText] then
+				local keyboard = config[ButtonText]:find("Keyboard");
+				if keyboard then
+					--presetKeyCode = Enum.KeyCode[config[ButtonText]:gsub("Keyboard", "")];
+					presetKeyCode = config[ButtonText]:gsub("Keyboard", "")
+					Key = presetKeyCode
+					ButtonCallback(Key)
+					--toggle_key = Enum.KeyCode[config[ButtonText]:gsub("Keyboard", "")];
+				else
+					--presetKeyCode = Enum.UserInputType[config[ButtonText]];
+					presetKeyCode = config[ButtonText]
+					Key = presetKeyCode
+					ButtonCallback(Key)
+					--toggle_key = Enum.UserInputType[config[ButtonText]];
+				end
+			end
+
+			ButtonCallback(Key)
+		
+			local ButtonLabel = Objects.new("Label")
+			ButtonLabel.Text = ButtonText .. ": " .. Key or ButtonText .. ": " .. "None"
+			ButtonLabel.TextColor3 = ThisTheme.ButtonAccent
+			ButtonLabel.Font = Enum.Font.GothamSemibold
+			ButtonLabel.TextSize = 14
+			ButtonLabel.ClipsDescendants = true
+			ButtonLabel.TextTransparency = 1
+			ButtonLabel.Parent = Button
+		
+			TweenService:Create(Button, TweenInfo.new(0.5), {ImageTransparency = 0}):Play()
+			TweenService:Create(ButtonShadow, TweenInfo.new(0.5), {ImageTransparency = 0}):Play()
+			TweenService:Create(ButtonLabel, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
+
+			--local presetKeyCode = Key
+			local keyCode = presetKeyCode
+			local shortNames = {
+				RightControl = 'RightCtrl';
+				LeftControl = 'LeftCtrl';
+				LeftShift = 'LShift';
+				RightShift = 'RShift';
+				MouseButton1 = "Mouse1";
+				MouseButton2 = "Mouse2";
+			};
+			local activated = presetKeyCode and true or false
+			local banned = {
+				Return = true;
+				Space = true;
+				Tab = true;
+				Unknown = true;
+			}
+
+			local function isreallypressed(bind, inp)
+				local key = bind
+				if typeof(key) == "Instance" then
+					if key.UserInputType == Enum.UserInputType.Keyboard and inp.KeyCode == key.KeyCode then
+						return true;
+					elseif tostring(key.UserInputType):find("MouseButton") and inp.UserInputType == key.UserInputType then
+						return true
+					end
+				end
+				if tostring(key):find'MouseButton' then
+					return key == inp.UserInputType
+				else
+					return key == inp.KeyCode
+				end
+			end
+
+			local allowed = {
+				MouseButton1 = true;
+				MouseButton2 = true;
+			};
+
+			InputService.InputBegan:Connect(function(input, onGui)
+				if onGui then return; end;
+				if activated and isreallypressed(keyCode, input) then
+					--ButtonCallback(true);
+				end;
+			end);
+			InputService.InputEnded:Connect(function(input, onGui)
+				if onGui then return; end;
+				if activated and not listening and isreallypressed(keyCode, input) then
+					--ButtonCallback(false);
+				end;
+			end);   
+			--MouseButton1Down
+			Button.MouseButton1Click:Connect(function()
+				CircleAnim(ButtonLabel, ThisTheme.ButtonAccent, ThisTheme.Button)
+				ButtonLabel.Text = ButtonConfig.Text .. ": " .. "..."
+				activated = false
+				local input, onGui = InputService.InputBegan:Wait();
+				config[ButtonText] = (input.UserInputType ~= Enum.UserInputType.Keyboard and input.UserInputType.Name or input.KeyCode.Name .. "Keyboard")
+				saveConfig()
+				keyCode = input;
+				local name = (input.UserInputType ~= Enum.UserInputType.Keyboard and (shortNames[input.UserInputType.Name] or input.UserInputType.Name) or input.KeyCode.Name);
+				ButtonLabel.Text = ButtonConfig.Text .. ": " .. name     
+				getgenv()[ButtonText] = name
+				activated = true;
+				ButtonCallback(input.KeyCode.Name or input.UserInputType.Name)
+			end)
+		
+			local MenuAdded = TryAddMenu(Button, Menu, {})
+		
+			return Button, ButtonLabel
+		end
+
+		function OptionLibrary.Keybind(KeybindConfig)
+			local NewButton, KeybindLabel = CreateNewKeybind(KeybindConfig, PageContentFrame)
+			local KeybindLibrary = {}
+
+			function KeybindLibrary:SetText(Value)
+				KeybindLabel.Text = Value
+			end
+
+			function KeybindLibrary:GetText()
+				return KeybindLabel.Text
+			end
+
+			return KeybindLibrary
+		end
+
+		function CreateNewKeybindState(ButtonConfig, Parent)
+			local ButtonText = ButtonConfig.Text or "nil button"
+			local ButtonCallback = ButtonConfig.Callback or function() print("nil button") end
+			local Menu = ButtonConfig.Menu or {}
+			local Key = config[ButtonText] or ButtonConfig.Key 
+			local Button = Objects.new("SmoothButton")
+			Button.Name = "Button"
+			Button.Size = UDim2.fromScale(1,0) + UDim2.fromOffset(0,30)
+			Button.ImageColor3 = ThisTheme.Button
+			Button.ImageTransparency = 1
+			Button.Parent = Parent
+		
+			local ButtonShadow = Objects.new("Shadow")
+			ButtonShadow.ImageColor3 = ThisTheme.Button
+			ButtonShadow.ImageTransparency = 1
+			ButtonShadow.Parent = Button
+
+			if config[ButtonText] then
+				local keyboard = config[ButtonText]:find("Keyboard");
+				if keyboard then
+					--presetKeyCode = Enum.KeyCode[config[ButtonText]:gsub("Keyboard", "")];
+					presetKeyCode = config[ButtonText]:gsub("Keyboard", "")
+					Key = presetKeyCode
+					--toggle_key = Enum.KeyCode[config[ButtonText]:gsub("Keyboard", "")];
+				else
+					--presetKeyCode = Enum.UserInputType[config[ButtonText]];
+					presetKeyCode = config[ButtonText]
+					Key = presetKeyCode
+					--toggle_key = Enum.UserInputType[config[ButtonText]];
+				end
+			end
+		
+			local ButtonLabel = Objects.new("Label")
+			ButtonLabel.Text = ButtonText .. ": " .. Key or ButtonText .. ": " .. "None"
+			ButtonLabel.TextColor3 = ThisTheme.ButtonAccent
+			ButtonLabel.Font = Enum.Font.GothamSemibold
+			ButtonLabel.TextSize = 14
+			ButtonLabel.ClipsDescendants = true
+			ButtonLabel.TextTransparency = 1
+			ButtonLabel.Parent = Button
+		
+			TweenService:Create(Button, TweenInfo.new(0.5), {ImageTransparency = 0}):Play()
+			TweenService:Create(ButtonShadow, TweenInfo.new(0.5), {ImageTransparency = 0}):Play()
+			TweenService:Create(ButtonLabel, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
+
+			--local presetKeyCode = Key
+			local keyCode = presetKeyCode
+			local shortNames = {
+				RightControl = 'RightCtrl';
+				LeftControl = 'LeftCtrl';
+				LeftShift = 'LShift';
+				RightShift = 'RShift';
+				MouseButton1 = "Mouse1";
+				MouseButton2 = "Mouse2";
+			};
+			local activated = true
+			local banned = {
+				Return = true;
+				Space = true;
+				Tab = true;
+				Unknown = true;
+			}
+
+			local function isreallypressed(bind, inp)
+				local key = bind
+				if typeof(key) == "Instance" then
+					if key.UserInputType == Enum.UserInputType.Keyboard and inp.KeyCode == key.KeyCode then
+						return true
+					elseif tostring(key.UserInputType):find("MouseButton") and inp.UserInputType == key.UserInputType then
+						return true
+					end
+				end
+				if tostring(key):find'MouseButton' then
+					return key == inp.UserInputType
+				else
+					return key == inp.KeyCode
+				end
+			end
+
+			local allowed = {
+				MouseButton1 = true;
+				MouseButton2 = true;
+			};
+
+			game:GetService("UserInputService").InputBegan:Connect(function(input, onGui)
+				if onGui then return end
+				if activated and isreallypressed(keyCode, input) then
+					ButtonCallback(true)
+				end;
+			end);
+			game:GetService("UserInputService").InputEnded:Connect(function(input, onGui)
+				if onGui then return end
+				--if activated and not listening and isreallypressed(keyCode, input) then
+				if activated and isreallypressed(keyCode, input) then
+					ButtonCallback(true)
+				end;
+			end);   
+			--MouseButton1Down
+			Button.MouseButton1Click:Connect(function()
+				CircleAnim(ButtonLabel, ThisTheme.ButtonAccent, ThisTheme.Button)
+				ButtonLabel.Text = ButtonConfig.Text .. ": " .. "..."
+				activated = false
+				local input, onGui = InputService.InputBegan:Wait();
+				config[ButtonText] = (input.UserInputType ~= Enum.UserInputType.Keyboard and input.UserInputType.Name or input.KeyCode.Name .. "Keyboard")
+				saveConfig()
+				keyCode = input;
+				local name = (input.UserInputType ~= Enum.UserInputType.Keyboard and (shortNames[input.UserInputType.Name] or input.UserInputType.Name) or input.KeyCode.Name);
+				ButtonLabel.Text = ButtonConfig.Text .. ": " .. name     
+				getgenv()[ButtonText] = name
+				activated = true;
+			end)
+		
+			local MenuAdded = TryAddMenu(Button, Menu, {})
+		
+			return Button, ButtonLabel
+		end
+
+		function OptionLibrary.KeybindState(KeybindConfig)
+			local NewButton, KeybindLabel = CreateNewKeybindState(KeybindConfig, PageContentFrame)
+			local KeybindLibrary = {}
+
+			function KeybindLibrary:SetText(Value)
+				KeybindLabel.Text = Value
+			end
+
+			function KeybindLibrary:GetText()
+				return KeybindLabel.Text
+			end
+
+			return KeybindLibrary
+		end
+
 		function OptionLibrary.Dropdown(DropdownConfig)
 			local DropdownText = DropdownConfig.Text or "nil dropdown"
 			local DropdownCallback = DropdownConfig.Callback or function() print("nil dropdown") end
@@ -1193,6 +1483,11 @@ function Material.Load(Config)
 				end
 			end)
 
+			if config[DropdownText] then
+				DropdownCallback(config[DropdownText])
+				DropdownTitle.Text = DropdownText..": "..config[DropdownText]
+			end
+
 			table.foreach(DropdownOptions, function(_, Value)
 				local NewButton = CreateNewButton({
 					Text = Value,
@@ -1201,6 +1496,8 @@ function Material.Load(Config)
 
 				NewButton.Size = UDim2.fromScale(1,0) + UDim2.fromOffset(0,20)
 				NewButton.MouseButton1Down:Connect(function()
+					config[DropdownText] = Value
+					saveConfig()
 					DropdownCallback(Value)
 					DropdownTitle.Text = DropdownText..": "..Value
 				end)
@@ -1261,6 +1558,8 @@ function Material.Load(Config)
 
 					NewButton.Size = UDim2.fromScale(1,0) + UDim2.fromOffset(0,20)
 					NewButton.MouseButton1Down:Connect(function()
+						config[DropdownText] = Value
+						saveConfig()
 						DropdownCallback(Value)
 						DropdownTitle.Text = DropdownText..": "..Value
 					end)
@@ -1309,14 +1608,26 @@ function Material.Load(Config)
 
 				local BuildTable = {}
 
-				table.foreach(ChipSetOptions, function(Key, Value)
-					if typeof(Value) == "table" then
-						BuildTable[Key] = Value.Enabled
-					else
-						BuildTable[Key] = Value
-					end
-				end)
-
+				local enabled = config[ChipSetText]
+				if enabled then
+					table.foreach(enabled, function(Key, Value)
+						if typeof(Value) == "table" then
+							BuildTable[Key] = Value.Enabled
+						else
+							BuildTable[Key] = Value
+						end
+					end)
+				else
+					table.foreach(ChipSetOptions, function(Key, Value)
+						if typeof(Value) == "table" then
+							BuildTable[Key] = Value.Enabled
+						else
+							BuildTable[Key] = Value
+						end
+					end)
+				end
+				config[ChipSetText] = BuildTable
+				saveConfig()
 				ChipSetCallback(BuildTable)
 
 				TweenService:Create(ChipSet, TweenInfo.new(0.5), {ImageTransparency = 0.9}):Play()
@@ -1381,6 +1692,8 @@ function Material.Load(Config)
 						if ChipMenu then
 							TweenService:Create(ChipMenu, TweenInfo.new(0.15), {ImageColor3 = Enabled and Theme.ChipSetAccent or Theme.ChipSet}):Play()
 						end
+						config[ChipSetText] = BuildTable
+						saveConfig()
 						ChipSetCallback(BuildTable)
 					end)
 				end)
@@ -1418,14 +1731,27 @@ function Material.Load(Config)
 
 					local BuildTable = {}
 
-					table.foreach(ChipSetOptions, function(Key, Value)
-						if typeof(Value) == "table" then
-							BuildTable[Key] = Value.Enabled
-						else
-							BuildTable[Key] = Value
-						end
-					end)
+					local enabled = config[ChipSetText]
+					if enabled then
+						table.foreach(enabled, function(Key, Value)
+							if typeof(Value) == "table" then
+								BuildTable[Key] = Value.Enabled
+							else
+								BuildTable[Key] = Value
+							end
+						end)
+					else
+						table.foreach(ChipSetOptions, function(Key, Value)
+							if typeof(Value) == "table" then
+								BuildTable[Key] = Value.Enabled
+							else
+								BuildTable[Key] = Value
+							end
+						end)
+					end
 
+					config[ChipSetText] = BuildTable
+					saveConfig()
 					ChipSetCallback(BuildTable)
 
 					TweenService:Create(ChipSet, TweenInfo.new(0.5), {ImageTransparency = 0.9}):Play()
@@ -1490,6 +1816,8 @@ function Material.Load(Config)
 							if ChipMenu then
 								TweenService:Create(ChipMenu, TweenInfo.new(0.15), {ImageColor3 = Enabled and Theme.ChipSetAccent or Theme.ChipSet}):Play()
 							end
+							config[ChipSetText] = BuildTable		
+							saveConfig()
 							ChipSetCallback(BuildTable)
 						end)
 					end)
@@ -1548,14 +1876,27 @@ function Material.Load(Config)
 
 				local BuildTable = {}
 
-				table.foreach(DataTableOptions, function(Key, Value)
-					if typeof(Value) == "table" then
-						BuildTable[Key] = Value.Enabled
-					else
-						BuildTable[Key] = Value
-					end
-				end)
+				local enabled = config[DataTableText]
+				if enabled then
+					table.foreach(enabled, function(Key, Value)
+						if typeof(Value) == "table" then
+							BuildTable[Key] = Value.Enabled
+						else
+							BuildTable[Key] = Value
+						end
+					end)
+				else
+					table.foreach(DataTableOptions, function(Key, Value)
+						if typeof(Value) == "table" then
+							BuildTable[Key] = Value.Enabled
+						else
+							BuildTable[Key] = Value
+						end
+					end)
+				end
 
+				config[DataTableText] = BuildTable
+				saveConfig()
 				DataTableCallback(BuildTable)
 
 				TweenService:Create(DataTable, TweenInfo.new(0.5), {ImageTransparency = 0.9}):Play()
@@ -1622,6 +1963,8 @@ function Material.Load(Config)
 						TweenService:Create(DataItem, TweenInfo.new(0.15), {ImageTransparency = Enabled and 0.8 or 0, ImageColor3 = Enabled and Theme.DataTable or Theme.DataTableAccent}):Play()
 						TweenService:Create(Tick, TweenInfo.new(0.15), {ImageTransparency = Enabled and 0 or 0.7}):Play()
 						TweenService:Create(DataTracker, TweenInfo.new(0.15), {ImageTransparency = Enabled and 0 or 0.8}):Play()
+						config[DataTableText] = BuildTable
+						saveConfig()
 						DataTableCallback(BuildTable)
 					end)
 				end)
@@ -1663,14 +2006,27 @@ function Material.Load(Config)
 
 					local BuildTable = {}
 
-					table.foreach(DataTableOptions, function(Key, Value)
-						if typeof(Value) == "table" then
-							BuildTable[Key] = Value.Enabled
-						else
-							BuildTable[Key] = Value
-						end
-					end)
-
+					local enabled = config[DataTableText]
+					if enabled then
+						table.foreach(enabled, function(Key, Value)
+							if typeof(Value) == "table" then
+								BuildTable[Key] = Value.Enabled
+							else
+								BuildTable[Key] = Value
+							end
+						end)
+					else
+						table.foreach(DataTableOptions, function(Key, Value)
+							if typeof(Value) == "table" then
+								BuildTable[Key] = Value.Enabled
+							else
+								BuildTable[Key] = Value
+							end
+						end)
+					end
+					
+					config[DataTableText] = BuildTable
+					saveConfig()
 					DataTableCallback(BuildTable)
 
 					TweenService:Create(DataTable, TweenInfo.new(0.5), {ImageTransparency = 0.9}):Play()
@@ -1737,6 +2093,8 @@ function Material.Load(Config)
 							TweenService:Create(DataItem, TweenInfo.new(0.15), {ImageTransparency = Enabled and 0.8 or 0, ImageColor3 = Enabled and Theme.DataTable or Theme.DataTableAccent}):Play()
 							TweenService:Create(Tick, TweenInfo.new(0.15), {ImageTransparency = Enabled and 0 or 0.7}):Play()
 							TweenService:Create(DataTracker, TweenInfo.new(0.15), {ImageTransparency = Enabled and 0 or 0.8}):Play()
+							config[DataTableText] = BuildTable
+							saveConfig()
 							DataTableCallback(BuildTable)
 						end)
 					end)
@@ -1753,7 +2111,7 @@ function Material.Load(Config)
 		function OptionLibrary.ColorPicker(ColorPickerConfig)
 			local ColorPickerText = ColorPickerConfig.Text or "nil color picker"
 			local ColorPickerCallback = ColorPickerConfig.Callback or function() print("nil color picker") end
-			local ColorPickerDefault = ColorPickerConfig.Default or Color3.fromRGB(255,255,255)
+			local ColorPickerDefault = config[ColorPickerText] or ColorPickerConfig.Default or Color3.fromRGB(255,255,255)
 			local ColorPickerMenu = ColorPickerConfig.Menu or {}
 			local ColorPickerToggle = false
 
@@ -1944,6 +2302,8 @@ function Material.Load(Config)
 					Color3.fromHSV(H.Value,1,V.Value), 
 					Color3.fromRGB(0,0,0):Lerp(Color3.fromRGB(255,255,255),V.Value)
 				)
+				config[ColorPickerText] = Color3.fromHSV(H.Value,S.Value,V.Value)
+				saveConfig()
 				ColorPickerCallback(Color3.fromHSV(H.Value,S.Value,V.Value))
 			end)
 
@@ -1957,6 +2317,8 @@ function Material.Load(Config)
 					Color3.fromHSV(H.Value,1,V.Value), 
 					Color3.fromRGB(0,0,0):Lerp(Color3.fromRGB(255,255,255),V.Value)
 				)
+				config[ColorPickerText] = Color3.fromHSV(H.Value,S.Value,V.Value)
+				saveConfig()
 				ColorPickerCallback(Color3.fromHSV(H.Value,S.Value,V.Value))
 			end)
 
@@ -1970,6 +2332,8 @@ function Material.Load(Config)
 					Color3.fromHSV(H.Value,1,V.Value), 
 					Color3.fromRGB(0,0,0):Lerp(Color3.fromRGB(255,255,255),V.Value)
 				)
+				config[ColorPickerText] = Color3.fromHSV(H.Value,S.Value,V.Value)
+				saveConfig()
 				ColorPickerCallback(Color3.fromHSV(H.Value,S.Value,V.Value))
 			end)
 
@@ -2046,7 +2410,7 @@ function Material.Load(Config)
 		function OptionLibrary.Toggle(ToggleConfig)
 			local ToggleText = ToggleConfig.Text or "nil toggle"
 			local ToggleCallback = ToggleConfig.Callback or function() print("nil toggle") end
-			local ToggleDefault = ToggleConfig.Enabled or false
+			local ToggleDefault = config[ToggleText] or ToggleConfig.Enabled
 			local Menu = ToggleConfig.Menu or {}
 
 			local Toggle = Objects.new("SmoothButton")
@@ -2106,6 +2470,8 @@ function Material.Load(Config)
 			Toggle.MouseButton1Down:Connect(function()
 				ToggleDefault = not ToggleDefault
 				TweenService:Create(Dot, TweenInfo.new(0.15), {Position = (ToggleDefault and UDim2.fromScale(1,0.5) or UDim2.fromScale(0,0.5)) - UDim2.fromOffset(8,8), ImageColor3 = ToggleDefault and Theme.Toggle or Theme.ToggleAccent}):Play()
+				config[ToggleText] = ToggleDefault
+				saveConfig()
 				ToggleCallback(ToggleDefault)
 				CircleAnim(ToggleLabel, Theme.ToggleAccent, Theme.Toggle)
 			end)
@@ -2172,7 +2538,7 @@ function Material.Load(Config)
 			TextInput.PlaceholderColor3 = Theme.TextFieldAccent
 			TextInput.TextInputType = Enum.TextInputType[TextFieldInputType]
 			TextInput.TextColor3 = Theme.TextFieldAccent
-			TextInput.Text = ""
+			TextInput.Text = config[TextFieldText] or ""
 			TextInput.Font = Enum.Font.GothamSemibold
 			TextInput.TextSize = 14
 			TextInput.TextTransparency = 1
@@ -2191,12 +2557,16 @@ function Material.Load(Config)
 			TextInput.FocusLost:Connect(function()
 				TweenService:Create(TextField, TweenInfo.new(0.5), {ImageTransparency = 0.8}):Play()
 				TweenService:Create(TextInput, TweenInfo.new(0.5), {TextTransparency = 0.5}):Play()
+				config[TextFieldText] = TextInput.Text
+				saveConfig()
 				TextFieldCallback(TextInput.Text)
 			end)
 
 			local MenuAdded, MenuBar = TryAddMenu(TextField, Menu, {
 				SetText = function(Value)
 					TextInput.Text = Value
+					config[TextFieldText] = TextInput.Text
+					saveConfig()
 					TextFieldCallback(TextInput.Text)
 				end
 			})
@@ -2257,8 +2627,12 @@ function Material.Load(Config)
 				SliderMin, SliderMax = SliderMax, ValueBefore
 			end
 
-			local SliderDef = math.clamp(SliderConfig.Def, SliderMin, SliderMax) or math.clamp(50, SliderMin, SliderMax)
+			local SliderDef = math.clamp(tonumber(config[SliderText]) or SliderConfig.Def, SliderMin, SliderMax) or math.clamp(50, SliderMin, SliderMax)
 			local DefaultScale =  (SliderDef - SliderMin) / (SliderMax - SliderMin)
+
+			if config[SliderText] then
+				SliderCallback(tonumber(config[SliderText]))
+			end
 
 			local Slider = Objects.new("Round")
 			Slider.Name = "Slider"
@@ -2348,6 +2722,8 @@ function Material.Load(Config)
 					SliderFadedDot.Size = UDim2.fromOffset(SizeFromScale,SizeFromScale)
 					SliderFadedDot.Position = UDim2.fromScale(DefaultScale,0.5) - UDim2.fromOffset(SizeFromScale/2,SizeFromScale/2)
 					SliderValue.Text = tostring(Value)
+					config[SliderText] = tostring(Value)
+					saveConfig()
 					SliderCallback(Value)
 				end)
 				MouseKill = InputService.InputEnded:Connect(function(UserInput)
